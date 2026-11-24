@@ -1,0 +1,81 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: ShellCheck
+        run: shellcheck scripts/*.sh test/*.sh
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
+
+  script:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Run the deploy script against a mock Coolify API
+        run: bash test/run-tests.sh
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Start a mock Coolify API
+        run: |
+          python3 test/mock_coolify.py 8787 &
+          for _ in $(seq 1 50); do curl -s -o /dev/null http://127.0.0.1:8787/api/health && exit 0; sleep 0.1; done
+          exit 1
+      - name: Run the action
+        id: deploy
+        uses: ./
+        with:
+          connect-tailscale: 'false'
+          coolify-url: http://127.0.0.1:8787
+          coolify-token: test-token
+          uuid: app-ok
+          interval: '1'
+      - name: Check the outputs
+        env:
+          STATUS: ${{ steps.deploy.outputs.status }}
+          UUIDS: ${{ steps.deploy.outputs.deployment-uuids }}
+        run: |
+          echo "status=$STATUS deployment-uuids=$UUIDS"
+          test "$STATUS" = finished
+          test -n "$UUIDS"
+      - name: Run the action on a failing deployment
+        id: failing
+        continue-on-error: true
+        uses: ./
+        with:
+          connect-tailscale: 'false'
+          webhook: http://127.0.0.1:8787/api/v1/deploy?uuid=app-fail&force=false
+          coolify-token: test-token
+          interval: '1'
+      - name: Check that the failure was reported
+        env:
+          OUTCOME: ${{ steps.failing.outcome }}
+          STATUS: ${{ steps.failing.outputs.status }}
+        run: |
+          echo "outcome=$OUTCOME status=$STATUS"
+          test "$OUTCOME" = failure
+          test "$STATUS" = failed
