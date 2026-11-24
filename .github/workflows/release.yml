@@ -1,0 +1,52 @@
+name: Release
+
+# On every push to main, release-please opens or updates a release pull
+# request from the Conventional Commits merged since the last release.
+# Merging that pull request creates the vX.Y.Z tag and the GitHub release,
+# then this workflow moves the major tag (v1, v2...) to the new release.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    if: github.repository == 'd9beuD/deploy-coolify-tailscale'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write # labels on the release pull requests
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          # Optional: a token that is not GITHUB_TOKEN, so that CI runs on the
+          # release pull requests. See "Releasing" in the README.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+
+      - name: Check out the release
+        if: steps.release.outputs.release_created == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.release.outputs.tag_name }}
+
+      - name: Move the major version tag
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag_name }}
+          MAJOR: v${{ steps.release.outputs.major }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --force --annotate "$MAJOR" --message "$MAJOR (currently $TAG)" HEAD
+          git push --force origin "refs/tags/$MAJOR"
+          echo "Moved $MAJOR to $TAG ($(git rev-parse --short HEAD))." >> "$GITHUB_STEP_SUMMARY"
