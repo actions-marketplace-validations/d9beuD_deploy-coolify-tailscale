@@ -32,6 +32,9 @@ Your Coolify dashboard and API stay private. No port needs to be opened to the i
 - [Outputs](#outputs)
 - [How it works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
+- [Security](#security)
+- [Versions](#versions)
+- [Changelog](#changelog)
 - [Development](#development)
 
 ## Requirements
@@ -301,6 +304,41 @@ Services and databases have no deployment to follow: Coolify starts them directl
 - Use a GitHub [environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) with protection rules for production secrets.
 - To protect yourself against a moved tag, pin the action to a commit SHA: `uses: d9beuD/deploy-coolify-tailscale@<sha> # v1.x.y`.
 
+## Versions
+
+This action follows [semantic versioning](https://semver.org). Each release has an exact tag (`v1.0.0`). The major tag (`v1`) moves to the latest release of that major version.
+
+| Reference | What you get |
+| --- | --- |
+| `@v1` | The latest `v1.x.y` release: bug fixes and new inputs, never a breaking change. Recommended. |
+| `@v1.0.0` | Exactly this release. Update it yourself, or with [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot). |
+| `@<commit-sha>` | Exactly this commit, even if a tag is moved. The safest choice. |
+
+A breaking change, such as a removed or renamed input or a changed default, comes with a new major version (`v2`).
+
+To let Dependabot update the action, add `.github/dependabot.yml` to your repository:
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+```
+
+## Changelog
+
+### v1.0.0
+
+First release.
+
+- Joins the tailnet as an ephemeral node with `tailscale/github-action@v4`, using workload identity federation, an OAuth client or an auth key.
+- Deploys Coolify resources by UUID, by tag or with the deploy webhook URL.
+- Supports preview deployments (`pr`), forced rebuilds (`force`) and cancelling older deployments (`cancel-previous`).
+- Waits for the deployments to finish, prints the Coolify build logs on failure and writes a job summary with links to each deployment.
+- Works with Coolify versions that require `POST /api/v1/deploy` and with older ones that only accept `GET`.
+
 ## Development
 
 The deploy logic lives in [`scripts/deploy.sh`](scripts/deploy.sh). It is tested against a small fake Coolify API ([`test/mock_coolify.py`](test/mock_coolify.py)):
@@ -313,12 +351,23 @@ You need `bash`, `curl`, `jq` and `python3`. CI also runs ShellCheck and actionl
 
 ### Releasing
 
-Create a release tag, then move the major version tag to it, so that `@v1` users get the update:
+1. Add the new version to the [changelog](#changelog) in a pull request, and merge it once CI passes.
+2. Update your local `main`:
 
-```bash
-git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
-```
+   ```bash
+   git checkout main && git pull
+   ```
 
-```bash
-git tag -fa v1 -m "v1" v1.0.0 && git push -f origin v1
-```
+3. Tag the release (replace `v1.0.0` with the new version) and push the tag:
+
+   ```bash
+   git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
+   ```
+
+4. Move the major version tag to it, so that `@v1` users get the update:
+
+   ```bash
+   git tag -fa v1 -m "v1" v1.0.0 && git push -f origin v1
+   ```
+
+5. On GitHub, go to **Releases → Draft a new release**, choose the `v1.0.0` tag, paste its changelog entry and publish it. To list the action on the GitHub Marketplace, tick **Publish this Action to the GitHub Marketplace** on that page.
