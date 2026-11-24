@@ -1,0 +1,165 @@
+name: 'Deploy to Coolify over Tailscale'
+description: 'Join your Tailscale network, trigger a Coolify deployment and wait for it to finish.'
+author: 'd9beuD'
+branding:
+  icon: 'upload-cloud'
+  color: 'purple'
+
+inputs:
+  # --- Coolify -------------------------------------------------------------
+  coolify-url:
+    description: 'Base URL of your Coolify instance as reachable inside the tailnet, e.g. `https://coolify.tail1234.ts.net` or `http://100.101.102.103:8000`. Not needed when `webhook` is set.'
+    required: false
+    default: ''
+  coolify-token:
+    description: 'Coolify API token. It needs the `deploy` permission (and `read` to follow the deployment).'
+    required: true
+  webhook:
+    description: 'Deploy webhook URL copied from Coolify (resource > Webhooks), e.g. `https://coolify.tail1234.ts.net/api/v1/deploy?uuid=abc123&force=false`. Replaces `coolify-url` + `uuid`.'
+    required: false
+    default: ''
+  uuid:
+    description: 'UUID(s) of the resource(s) to deploy. Separate several UUIDs with commas, spaces or new lines. Use one of `uuid`, `tag` or `webhook`.'
+    required: false
+    default: ''
+  tag:
+    description: 'Coolify tag name(s): every resource with one of these tags is deployed. Separate several tags with commas, spaces or new lines. Use one of `uuid`, `tag` or `webhook`.'
+    required: false
+    default: ''
+  force:
+    description: 'Force a rebuild without the build cache.'
+    required: false
+    default: 'false'
+  pr:
+    description: 'Pull request number, to deploy a preview deployment. Cannot be used with `tag`.'
+    required: false
+    default: ''
+  cancel-previous:
+    description: 'Cancel older API/webhook deployments of the same application: `none`, `queued` or `building`. Requires a Coolify version that supports it.'
+    required: false
+    default: 'none'
+  wait:
+    description: 'Wait for the deployment(s) to finish and fail the step if one fails.'
+    required: false
+    default: 'true'
+  timeout:
+    description: 'Maximum time to wait for the deployment(s), in seconds.'
+    required: false
+    default: '900'
+  interval:
+    description: 'Time between two status checks, in seconds.'
+    required: false
+    default: '10'
+  show-logs:
+    description: 'When to print the Coolify build logs in the workflow log: `on-failure`, `always` or `never`.'
+    required: false
+    default: 'on-failure'
+  connect-timeout:
+    description: 'How long to wait for the Coolify instance to become reachable through Tailscale, in seconds.'
+    required: false
+    default: '120'
+
+  # --- Tailscale -----------------------------------------------------------
+  connect-tailscale:
+    description: 'Set to `false` to skip the Tailscale step, for example when the runner is already in your tailnet.'
+    required: false
+    default: 'true'
+  tailscale-oauth-client-id:
+    description: 'Tailscale OAuth client ID (or federated identity client ID when `tailscale-audience` is set).'
+    required: false
+    default: ''
+  tailscale-oauth-secret:
+    description: 'Tailscale OAuth client secret.'
+    required: false
+    default: ''
+  tailscale-audience:
+    description: 'Tailscale workload identity federation audience. Requires the `id-token: write` permission.'
+    required: false
+    default: ''
+  tailscale-authkey:
+    description: 'Tailscale auth key. OAuth clients or workload identity federation are recommended instead.'
+    required: false
+    default: ''
+  tailscale-tags:
+    description: 'Comma-separated tags for the ephemeral runner node. Required with OAuth or workload identity federation.'
+    required: false
+    default: 'tag:ci'
+  tailscale-version:
+    description: 'Tailscale version to install, or `latest`.'
+    required: false
+    default: 'latest'
+  tailscale-hostname:
+    description: 'Hostname of the runner node in your tailnet. Generated from the runner name if empty.'
+    required: false
+    default: ''
+  tailscale-args:
+    description: 'Extra arguments for `tailscale up`.'
+    required: false
+    default: ''
+  tailscale-ping:
+    description: 'Comma-separated tailnet hosts to `tailscale ping` before deploying, to make sure they are reachable.'
+    required: false
+    default: ''
+  tailscale-use-cache:
+    description: 'Cache the Tailscale binaries between runs.'
+    required: false
+    default: 'true'
+
+outputs:
+  deployment-uuids:
+    description: 'Comma-separated UUIDs of the deployments that were queued.'
+    value: ${{ steps.deploy.outputs.deployment-uuids }}
+  status:
+    description: 'Overall result: `finished`, `failed`, `timeout`, or `queued` when `wait` is `false`.'
+    value: ${{ steps.deploy.outputs.status }}
+  response:
+    description: 'Raw JSON response of the Coolify deploy endpoint.'
+    value: ${{ steps.deploy.outputs.response }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Connect to Tailscale (OAuth / workload identity)
+      if: inputs.connect-tailscale == 'true' && inputs.tailscale-authkey == ''
+      uses: tailscale/github-action@v4
+      with:
+        oauth-client-id: ${{ inputs.tailscale-oauth-client-id }}
+        oauth-secret: ${{ inputs.tailscale-oauth-secret }}
+        audience: ${{ inputs.tailscale-audience }}
+        tags: ${{ inputs.tailscale-tags }}
+        version: ${{ inputs.tailscale-version }}
+        hostname: ${{ inputs.tailscale-hostname }}
+        args: ${{ inputs.tailscale-args }}
+        ping: ${{ inputs.tailscale-ping }}
+        use-cache: ${{ inputs.tailscale-use-cache }}
+
+    - name: Connect to Tailscale (auth key)
+      if: inputs.connect-tailscale == 'true' && inputs.tailscale-authkey != ''
+      uses: tailscale/github-action@v4
+      with:
+        authkey: ${{ inputs.tailscale-authkey }}
+        tags: ${{ inputs.tailscale-tags }}
+        version: ${{ inputs.tailscale-version }}
+        hostname: ${{ inputs.tailscale-hostname }}
+        args: ${{ inputs.tailscale-args }}
+        ping: ${{ inputs.tailscale-ping }}
+        use-cache: ${{ inputs.tailscale-use-cache }}
+
+    - name: Deploy to Coolify
+      id: deploy
+      shell: bash
+      env:
+        COOLIFY_URL: ${{ inputs.coolify-url }}
+        COOLIFY_TOKEN: ${{ inputs.coolify-token }}
+        DEPLOY_WEBHOOK: ${{ inputs.webhook }}
+        DEPLOY_UUID: ${{ inputs.uuid }}
+        DEPLOY_TAG: ${{ inputs.tag }}
+        DEPLOY_FORCE: ${{ inputs.force }}
+        DEPLOY_PR: ${{ inputs.pr }}
+        DEPLOY_CANCEL_PREVIOUS: ${{ inputs.cancel-previous }}
+        DEPLOY_WAIT: ${{ inputs.wait }}
+        DEPLOY_TIMEOUT: ${{ inputs.timeout }}
+        DEPLOY_INTERVAL: ${{ inputs.interval }}
+        DEPLOY_SHOW_LOGS: ${{ inputs.show-logs }}
+        DEPLOY_CONNECT_TIMEOUT: ${{ inputs.connect-timeout }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/deploy.sh"
