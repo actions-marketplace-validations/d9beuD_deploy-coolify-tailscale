@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/d9beuD/deploy-coolify-tailscale/compare/v1.0.1...v1.0.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* flush the DNS cache between Coolify reachability retries ([fc6ca64](https://github.com/d9beuD/deploy-coolify-tailscale/commit/fc6ca646c9ef0892cd10fe0abeaff9ff78d4f48e))
+* flush the DNS cache between Coolify reachability retries ([66f6a44](https://github.com/d9beuD/deploy-coolify-tailscale/commit/66f6a4412b4d86c36614a739e645f3d164c88a1d))
+
 ## [1.0.1](https://github.com/d9beuD/deploy-coolify-tailscale/compare/v1.0.0...v1.0.1) (2026-11-24)
 
 
