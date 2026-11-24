@@ -358,12 +358,14 @@ Commit messages (or pull request titles, when you squash-merge) follow [Conventi
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please) in [`.github/workflows/release.yml`](.github/workflows/release.yml):
 
-1. Each push to `main` opens or updates a **release pull request**, titled like `chore(main): release 1.1.0`. It bumps [`version.txt`](version.txt) and adds the new entry to [`CHANGELOG.md`](CHANGELOG.md).
+1. Each push to `main` opens or updates a **release pull request**, titled like `chore(main): release 1.1.0`. It updates the version in [`.release-please-manifest.json`](.release-please-manifest.json) and adds the new entry to [`CHANGELOG.md`](CHANGELOG.md).
 2. Merge that pull request when you want to release. The workflow then:
    - creates the `vX.Y.Z` tag and the GitHub release, with the changelog entry as release notes;
    - moves the major tag (`v1`) to the new release, so that `@v1` users get it.
 
 The configuration lives in [`release-please-config.json`](release-please-config.json), and the last released version in [`.release-please-manifest.json`](.release-please-manifest.json).
+
+Do not create releases or `vX.Y.Z` tags by hand: release-please does not see them, and would later try to create the same version again. To publish a release to the GitHub Marketplace, edit the release that release-please created.
 
 To force a specific version, add a `Release-As: 1.2.3` footer to a commit message.
 
