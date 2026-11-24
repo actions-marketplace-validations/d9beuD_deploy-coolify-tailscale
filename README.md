@@ -289,6 +289,7 @@ Services and databases have no deployment to follow: Coolify starts them directl
 | Symptom | Fix |
 | --- | --- |
 | `Could not reach Coolify` | Check `coolify-url`. Check that your ACLs let the runner's tag reach the Coolify machine on that port. Set `tailscale-ping` to the Coolify host to debug connectivity. If the MagicDNS name does not resolve, use the Tailscale IP. |
+| `Could not resolve the Coolify host` | The runner could not turn the host name into an address. The action flushes the resolver cache between attempts, so a lookup made before Tailscale finished setting up MagicDNS does not stick. If it still fails, read the `DNS diagnostics` group in the log (`resolvectl status`, `tailscale dns status`): check that MagicDNS is enabled for your tailnet, or use the Tailscale IP. |
 | `API is disabled.` | Enable the API in Coolify: **Settings → Advanced**. |
 | `You are not allowed to access the API.` | The Coolify API is restricted to allowed IPs. Add `100.64.0.0/10`, or your runners' Tailscale IPs. |
 | `Missing required permissions: deploy` | Create a token with the `deploy` permission. |

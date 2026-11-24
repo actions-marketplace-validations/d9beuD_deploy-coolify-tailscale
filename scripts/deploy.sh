@@ -161,6 +161,28 @@ API_URL="${BASE_URL}/api/v1"
 #    to learn about the new runner node).
 # ---------------------------------------------------------------------------
 
+is_dns_error() { grep -q "Could not resolve host" "$WORK_DIR/curl.err" 2>/dev/null; }
+
+# Tailscale configures MagicDNS in the background, shortly after `tailscale up`
+# returns. A *.ts.net lookup made before that goes to public DNS, gets
+# NXDOMAIN, and systemd-resolved keeps serving that cached answer even once
+# MagicDNS is ready. Flushing the cache makes the next attempt ask again.
+flush_dns_cache() {
+  command -v resolvectl >/dev/null 2>&1 || return 0
+  sudo -n resolvectl flush-caches >/dev/null 2>&1 || resolvectl flush-caches >/dev/null 2>&1 || true
+}
+
+print_dns_diagnostics() {
+  group "DNS diagnostics"
+  if command -v resolvectl >/dev/null 2>&1; then
+    echo "\$ resolvectl status"; resolvectl status 2>&1 || true
+  fi
+  if command -v tailscale >/dev/null 2>&1; then
+    echo "\$ tailscale dns status"; tailscale dns status 2>&1 || true
+  fi
+  endgroup
+}
+
 info "Checking that Coolify is reachable at ${BASE_URL}..."
 deadline=$(( $(date +%s) + CONNECT_TIMEOUT ))
 while :; do
@@ -168,8 +190,13 @@ while :; do
   [ "$HTTP_STATUS" != "000" ] && break
   if [ "$(date +%s)" -ge "$deadline" ]; then
     cat "$WORK_DIR/curl.err" >&2 || true
+    if is_dns_error; then
+      print_dns_diagnostics
+      fail "Could not resolve the Coolify host of ${BASE_URL} after ${CONNECT_TIMEOUT}s. If it is a MagicDNS name (or a CNAME to one), check that MagicDNS is enabled for your tailnet, or use the Tailscale IP instead. See the DNS diagnostics above."
+    fi
     fail "Could not reach Coolify at ${BASE_URL} after ${CONNECT_TIMEOUT}s. Check that the URL is correct, that the runner joined your tailnet and that your Tailscale ACLs let the runner's tags reach the Coolify host and port."
   fi
+  is_dns_error && flush_dns_cache
   sleep 3
 done
 info "Coolify is reachable (HTTP ${HTTP_STATUS})."

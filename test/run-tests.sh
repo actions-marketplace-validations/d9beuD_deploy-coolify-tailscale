@@ -89,6 +89,9 @@ run "missing uuid and tag"               1 ""
 run "uuid and tag together"              1 ""       DEPLOY_UUID=app-ok DEPLOY_TAG=web
 run "unreachable Coolify"                1 ""       DEPLOY_UUID=app-ok COOLIFY_URL="http://127.0.0.1:1" DEPLOY_CONNECT_TIMEOUT=2
 expect_log "Could not reach Coolify"
+run "unresolvable Coolify host"         1 ""       DEPLOY_UUID=app-ok COOLIFY_URL="http://coolify.invalid" DEPLOY_CONNECT_TIMEOUT=2
+expect_log "Could not resolve the Coolify host"
+expect_log "DNS diagnostics"
 
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed."; exit 1; fi
